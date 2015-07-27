@@ -34,7 +34,7 @@ $config['db_prefix'] = '';
  *
  * Which theme to use
  * Folder name in htdocs/themes/
- * Currently: default, bootstrap, gabdark, gabdark3, geocities, snowkat, stikkedizr
+ * Currently: default, bootstrap, gabdark, gabdark3, geocities, snowkat, stikkedizr, cleanwhite
  *
 */
 $config['theme'] = 'default';
@@ -42,12 +42,9 @@ $config['theme'] = 'default';
 /**
  * Language
  *
- * Which language to use
- * Translate Stikked to your own language, see htdocs/application/language files
- * Currently: english, german, swissgerman, spanish, norwegian, portuguese, turkish, french, japanese
+ * New Language settings in application/config/language.php
  *
 */
-$config['language'] = 'english';
 
 /**
  * Combine JS & CSS files (recommended)
@@ -120,9 +117,11 @@ $config['apikey'] = '';
  * private_only: No recent pastes will be displayed.
  * enable_captcha: Users must enter a captcha to post.
  * recaptcha_publickey & recaptcha_privatekey: If filled, reCaptcha will be used (get a key from https://www.google.com/recaptcha/admin/create)
- * blocked_words: Comma separated list, e.g. '.es.tl, mycraft.com, yourbadword'
  * disable_api: Don't allow pasting via API (because we can't use a captcha there...)
+ * disable_keep_forever: Don't allow pasting without expiration
+ * blocked_words: Comma separated list, e.g. '.es.tl, mycraft.com, yourbadword'
  * disable_shorturl: "Create Shorturl" option will be disabled
+ * disallow_search_engines: displays a robots.txt that forbids indexing
  *
 **/
 $config['private_only'] = false;
@@ -130,6 +129,7 @@ $config['enable_captcha'] = true;
 $config['recaptcha_publickey'] = '';
 $config['recaptcha_privatekey'] = '';
 $config['disable_api'] = false;
+$config['disable_keep_forever'] = false;
 $config['blocked_words'] = '';
 $config['disable_shorturl'] = false;
 $config['disallow_search_engines'] = false;
@@ -142,14 +142,14 @@ $config['spamadmin_pass'] = '';
  * Default paste expiration time (minutes)
  *
  * Possible values:
- *  0 (keep forever)
- *  30 (30 minutes)
+ *  burn (burn on reading)
+ *  5 (5 minutes)
  *  60 (1 hour)
- *  360 (6 hours)
- *  720 (12 hours)
  *  1440 (1 day)
  *  10080 (1 week)
- *  40320 (4 weeks)
+ *  40320 (1 month)
+ *  483840 (1 year)
+ *  0 (keep forever)
 **/
 $config['default_expiration'] = 0;
 
@@ -220,7 +220,7 @@ $config['nouns'] = array('Hornbill', 'Elephant', 'Bison', 'Lion', 'Camel', 'Shee
 'Pig', 'Anoa', 'Octupus', 'Butterfly', 'Cat', 'Kitten', 'Coyote', 'Crocodile',
 'Cockroach', 'Crow', 'Bird', 'Dolphin', 'Earthworm', 'Frog', 'Hamster', 'Hedgehog',
 'Hog', 'Human', 'Hummingbird', 'Iguana', 'Leech', 'Leopard', ' Marten',
-'Mockingbird', 'Mosquito', 'Moth', 'Partdridge', 'Bee', 'Penguin');
+'Mockingbird', 'Mockingjay', 'Mosquito', 'Moth', 'Partdridge', 'Bee', 'Penguin');
 
 $config['adjectives'] = array('Ample', 'Mature', 'Bulky', 'Burly', 'Capacious',
 'Colossal', 'Commodious', 'Thundering', 'Mammoth', 'Mungo', 'Voluminous',

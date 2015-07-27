@@ -30,7 +30,7 @@
 						<?php echo lang('paste_title'); ?>
 					</label>
 					
-					<input value="<?php if(isset($title_set)){ echo $title_set; }?>" class="span3" type="text" id="title" name="title" tabindex="2" maxlength="32" />
+					<input value="<?php if(isset($title_set)){ echo $title_set; }?>" class="span3" type="text" id="title" name="title" tabindex="2" maxlength="50" />
 				</div>
 		
 				<div class="span3">
@@ -92,17 +92,21 @@
 						</label>
 						<?php 
 							$expire_extra = 'id="expire" class="select" tabindex="7"';
+                            $default_expiration = config_item('default_expiration');
 							$options = array(
-											"0" => lang('exp_forever'),
-											"30" => lang('exp_30min'),
-											"60" => lang('exp_1h'),
-											"360" => lang('exp_6h'),
-											"720" => lang('exp_12h'),
-											"1440" => lang('exp_1d'),
-											"10080" => lang('exp_1w'),
-											"40320" => lang('exp_4w'),
+                                        "burn" => lang('exp_burn'),
+                                        "5" => lang('exp_5min'),
+                                        "60" => lang('exp_1h'),
+                                        "1440" => lang('exp_1d'),
+                                        "10080" => lang('exp_1w'),
+                                        "40320" => lang('exp_1m'),
+                                        "483840" => lang('exp_1y'),
 									);
-						echo form_dropdown('expire', $options, $expire_set, $expire_extra); ?>
+                            if(! config_item('disable_keep_forever')) {
+                                $options['0'] = lang('exp_forever');
+                                $default_expiration = '0'; // forever
+                            }
+						echo form_dropdown('expire', $options, $default_expiration, $expire_extra); ?>
 					</div>
 				</div>
 			</div>

@@ -104,10 +104,19 @@ class Pastes extends CI_Model
 			}
 		}
 		while ($n == 0);
+		$burn = false;
 		
-		if ($this->input->post('expire') == 0) 
+		if ($this->input->post('expire') == '0') 
 		{
 			$data['expire'] = 0;
+		}
+		else 
+		if ($this->input->post('expire') == 'burn') 
+		{
+			$burn = true;
+			$data['toexpire'] = 1;
+			$data['expire'] = 0;
+			$data['private'] = 1;
 		}
 		else
 		{
@@ -128,7 +137,16 @@ class Pastes extends CI_Model
 		}
 		$data['ip_address'] = $this->input->ip_address();
 		$this->db->insert('pastes', $data);
-		return 'view/' . $data['pid'];
+		
+		if ($burn) 
+		{
+			echo 'copy this URL, it will become invalid on visit: ' . site_url('view/' . $data['pid']);
+			exit;
+		}
+		else
+		{
+			return 'view/' . $data['pid'];
+		}
 	}
 	private 
 	function _get_url($pid) 
@@ -235,6 +253,9 @@ class Pastes extends CI_Model
 			$data['lang'] = $this->languages->code_to_description($row['lang']);
 			$data['paste'] = $this->process->syntax(htmlspecialchars_decode($row['raw']) , $row['lang']);
 			$data['created'] = $row['created'];
+			$data['private'] = $row['private'];
+			$data['expire'] = $row['expire'];
+			$data['toexpire'] = $row['toexpire'];
 			$data['url'] = $this->_get_url($row['pid']);
 			$data['raw'] = $row['raw'];
 			$data['hits'] = $row['hits'];
@@ -277,7 +298,7 @@ class Pastes extends CI_Model
 						//diff
 						//yes, I'm aware, two times htmlspecialchars_decode(). Needs to be, since it's saved that way in the DB from the original stikked author ages ago ;)
 
-						include_once ('./application/libraries/finediff.php');
+						include_once (APPPATH . '/libraries/finediff.php');
 						$from_text = htmlspecialchars_decode(utf8_decode($row['raw']));
 						$to_text = htmlspecialchars_decode(utf8_decode($data['raw']));
 						$opcodes = FineDiff::getDiffOpcodes($from_text, $to_text, FineDiff::$wordGranularity);
@@ -358,6 +379,13 @@ class Pastes extends CI_Model
 		{
 			$this->calculate_hits($pid, $data['hits']);
 		}
+
+		//burn if necessary
+		
+		if ($data['expire'] == 0 and $data['toexpire'] == 1) 
+		{
+			$this->delete_paste($data['pid']);
+		}
 		return $data;
 	}
 	
@@ -426,11 +454,61 @@ class Pastes extends CI_Model
 		$this->load->library('pagination');
 		$this->load->library('process');
 		$amount = $this->config->item('per_page');
-		$page = ($this->uri->segment(2) ? $this->uri->segment(2) : 0);
-		$this->db->select('id, title, name, created, pid, lang, raw');
-		$this->db->where('private', 0);
-		$this->db->order_by('created', 'desc');
-		$query = $this->db->get('pastes', $amount, $page);
+		$page = ($this->uri->segment($seg) ? $this->uri->segment($seg) : 0);
+		$search = $this->input->get('search');
+		
+		if ($search) 
+		{
+			$search = '%' . $search . '%';
+
+			// count total results
+			$sql = "SELECT id FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?)";
+			$query = $this->db->query($sql, array(
+				$search,
+				$search,
+			));
+			$total_rows = $query->num_rows();
+
+			// query
+			
+			if ($this->db->dbdriver == "postgre") 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY created DESC LIMIT $amount OFFSET $page";
+			}
+			else 
+			if ($root == 'api/recent') 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY created DESC LIMIT 0,15";
+			}
+			else
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY created DESC LIMIT $page,$amount";
+			}
+			$query = $this->db->query($sql, array(
+				$search,
+				$search,
+			));
+		}
+		else
+		{
+
+			// count total results
+			$sql = "SELECT id FROM pastes WHERE private = 0";
+			$query = $this->db->query($sql);
+			$total_rows = $query->num_rows();
+
+			// query
+			
+			if ($this->db->dbdriver == "postgre") 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw FROM pastes WHERE private = 0 ORDER BY created DESC LIMIT $amount OFFSET $page";
+			}
+			else
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw FROM pastes WHERE private = 0 ORDER BY created DESC LIMIT $page,$amount";
+			}
+			$query = $this->db->query($sql);
+		}
 		
 		if ($query->num_rows() > 0) 
 		{
@@ -453,12 +531,15 @@ class Pastes extends CI_Model
 			}
 		}
 		$config['base_url'] = site_url($root);
-		$config['total_rows'] = $this->countPastes();
+		$config['total_rows'] = $total_rows;
 		$config['per_page'] = $amount;
 		$config['num_links'] = 9;
 		$config['full_tag_open'] = '<div class="pages">';
 		$config['full_tag_close'] = '</div>';
 		$config['uri_segment'] = $seg;
+		$searchparams = ($this->input->get('search') ? '?search=' . $this->input->get('search') : '');
+		$config['first_url'] = '0' . $searchparams;
+		$config['suffix'] = $searchparams;
 		$this->pagination->initialize($config);
 		$data['pages'] = $this->pagination->create_links();
 		return $data;
@@ -469,11 +550,60 @@ class Pastes extends CI_Model
 		$this->load->library('pagination');
 		$amount = $this->config->item('per_page');
 		$page = ($this->uri->segment(2) ? $this->uri->segment(2) : 0);
-		$this->db->select('id, title, name, created, pid, lang, raw, hits');
-		$this->db->where('private', 0);
-		$this->db->order_by('hits', 'desc');
-		$this->db->order_by('created', 'desc');
-		$query = $this->db->get('pastes', $amount, $page);
+		$search = $this->input->get('search');
+		
+		if ($search) 
+		{
+			$search = '%' . $search . '%';
+
+			// count total results
+			$sql = "SELECT id FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?)";
+			$query = $this->db->query($sql, array(
+				$search,
+				$search,
+			));
+			$total_rows = $query->num_rows();
+
+			// query
+			
+			if ($this->db->dbdriver == "postgre") 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw, hits FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY hits DESC, created DESC LIMIT $amount OFFSET $page";
+			}
+			else 
+			if ($root == "api/trending") 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw, hits FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY hits DESC, created DESC LIMIT 0,15";
+			}
+			else
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw, hits FROM pastes WHERE private = 0 AND (title LIKE ? OR raw LIKE ?) ORDER BY hits DESC, created DESC LIMIT $page,$amount";
+			}
+			$query = $this->db->query($sql, array(
+				$search,
+				$search,
+			));
+		}
+		else
+		{
+
+			// count total results
+			$sql = "SELECT id FROM pastes WHERE private = 0";
+			$query = $this->db->query($sql);
+			$total_rows = $query->num_rows();
+
+			// query
+			
+			if ($this->db->dbdriver == "postgre") 
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw, hits FROM pastes WHERE private = 0 ORDER BY hits DESC, created DESC LIMIT $amount OFFSET $page";
+			}
+			else
+			{
+				$sql = "SELECT id, title, name, created, pid, lang, raw, hits FROM pastes WHERE private = 0 ORDER BY hits DESC, created DESC LIMIT $page,$amount";
+			}
+			$query = $this->db->query($sql);
+		}
 		
 		if ($query->num_rows() > 0) 
 		{
@@ -492,12 +622,15 @@ class Pastes extends CI_Model
 			}
 		}
 		$config['base_url'] = site_url($root);
-		$config['total_rows'] = $this->countPastes();
+		$config['total_rows'] = $total_rows;
 		$config['per_page'] = $amount;
 		$config['num_links'] = 9;
 		$config['full_tag_open'] = '<div class="pages">';
 		$config['full_tag_close'] = '</div>';
 		$config['uri_segment'] = $seg;
+		$searchparams = ($this->input->get('search') ? '?search=' . $this->input->get('search') : '');
+		$config['first_url'] = '0' . $searchparams;
+		$config['suffix'] = $searchparams;
 		$this->pagination->initialize($config);
 		$data['pages'] = $this->pagination->create_links();
 		return $data;
@@ -565,10 +698,9 @@ class Pastes extends CI_Model
 		{
 			$stamp = $row['expire'];
 			
-			if ($now > $stamp) 
+			if ($now > $stamp AND $stamp != 0) 
 			{
-				$this->db->where('id', $row['id']);
-				$this->db->delete('pastes');
+				$this->delete_paste($row['pid']);
 			}
 		}
 		return;
@@ -578,6 +710,10 @@ class Pastes extends CI_Model
 	{
 		$this->db->where('pid', $pid);
 		$this->db->delete('pastes');
+
+		// delete from trending
+		$this->db->where('paste_id', $pid);
+		$this->db->delete('trending');
 		return;
 	}
 	
